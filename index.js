@@ -3,13 +3,9 @@ const cors = require("cors");
 const mongoose = require("mongoose");
 const bodyParser = require("body-parser");
 require("dotenv").config();
-
-// const authRoutes = require("./Routes/AuthRoutes");
-// const unAuthRoutes = require("./Routes/UnAuthRoutes");
 const router = require("./Routes/index");
 const app = express();
 const cookieParser = require("cookie-parser");
-const { checkAuthorization } = require("./Middlewares/AuthMiddlewares");
 
 // const dbs = Object.freeze({
 //   EABHA_PROD: process.env.EABHA_PROD,
@@ -21,7 +17,7 @@ const db_connection = Object.freeze({
 });
 
 app.get("/", (req, res) => {
-  res.json({ message: "Welcome to Eabha" });
+  res.json({ message: "Welcome to Eabha Accountease" });
 });
 app.listen(8000, () => {
   console.log("Server started on PORT 8000");
