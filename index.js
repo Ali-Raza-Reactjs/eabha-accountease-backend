@@ -40,7 +40,7 @@ app.use(
     origin: [
       "http://localhost:3000",
       "http://localhost:3001",
-      "https://eabha-accountease.web.app/",
+      "https://eabha-accountease.web.app",
     ],
     methods: ["GET", "POST", "DELETE"],
     credentials: true,
