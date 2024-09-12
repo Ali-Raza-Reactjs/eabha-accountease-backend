@@ -7,14 +7,18 @@ const router = require("./Routes/index");
 const app = express();
 const cookieParser = require("cookie-parser");
 
-// const dbs = Object.freeze({
-//   EABHA_PROD: process.env.EABHA_PROD,
-//   EABHA_DEV: process.env.EABHA_DEV,
-// });
-const db_connection = Object.freeze({
-  office: `mongodb://127.0.0.1:27017/eabha-accountease`,
-  home: `mongodb://127.0.0.1:27017/eabha-accountease`,
+const dbs = Object.freeze({
+  EABHA_PROD: process.env.EABHA_PROD,
+  EABHA_DEV: process.env.EABHA_DEV,
 });
+const db_connection = Object.freeze({
+  office: `mongodb+srv://${process.env.USER}:${process.env.PASSWORD}@eabhabackend.o0wkwav.mongodb.net/${dbs.EABHA_PROD}?retryWrites=true&w=majority&appName=EabhaBackend`,
+  home: `mongodb://${process.env.USER}:${process.env.PASSWORD}@ac-g2d4z2j-shard-00-00.o0wkwav.mongodb.net:27017,ac-g2d4z2j-shard-00-01.o0wkwav.mongodb.net:27017,ac-g2d4z2j-shard-00-02.o0wkwav.mongodb.net:27017/${dbs.EABHA_PROD}?ssl=true&replicaSet=atlas-7ocb8t-shard-0&authSource=admin&retryWrites=true&w=majority&appName=EabhaBackend`,
+});
+// const db_connection = Object.freeze({
+//   office: `mongodb://127.0.0.1:27017/eabha-accountease`,
+//   home: `mongodb://127.0.0.1:27017/eabha-accountease`,
+// });
 
 app.get("/", (req, res) => {
   res.json({ message: "Welcome to Eabha Accountease" });
