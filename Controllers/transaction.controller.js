@@ -20,6 +20,22 @@ const getTransactionTypes = async (req, res) => {
     res.status(500).send(apiResponse);
   }
 };
+const getTransactionCategories = async (req, res) => {
+  let apiResponse = new ApiResponseModel();
+  try {
+    const data = await mongoose.connection.db
+      .collection("transactionCategories")
+      .find({})
+      .toArray();
+    apiResponse.status = true;
+    apiResponse.data = data;
+    res.status(200).json(apiResponse);
+  } catch (error) {
+    console.error(error);
+    apiResponse.errors = error;
+    res.status(500).send(apiResponse);
+  }
+};
 
 const addTransaction = async (req, res) => {
   const { type, ...others } = req.body;
@@ -394,6 +410,7 @@ const deleteTransaction = async (req, res) => {
 
 module.exports = {
   getTransactionTypes,
+  getTransactionCategories,
   addTransaction,
   updateTransaction,
   getMemberTransactionDetails,
