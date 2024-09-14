@@ -9,7 +9,7 @@ const getTransactionTypes = async (req, res) => {
   try {
     const data = await mongoose.connection.db
       .collection("transactionTypes")
-      .find({})
+      .find({ forSelection: true })
       .toArray();
     apiResponse.status = true;
     apiResponse.data = data;
