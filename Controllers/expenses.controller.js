@@ -588,7 +588,7 @@ const addGroupMembersExpenses = async (req, res) => {
       );
 
       await MemberModel.bulkWrite(memberBalanceUpdateOperation);
-      apiResponse.status = false;
+      apiResponse.status = true;
       apiResponse.msg = "Expense Added successfully";
       apiResponse.data = expenseResponse;
     }
