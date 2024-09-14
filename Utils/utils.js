@@ -1,6 +1,28 @@
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const MemberModel = require("../Models/MemberModel");
+const admin = require("firebase-admin");
+const bcrypt = require("bcrypt");
+const serviceAccount = {
+  type: process.env.SERVICE_ACCOUNT_TYPE,
+  project_id: process.env.SERVICE_ACCOUNT_PROJECT_ID,
+  private_key_id: process.env.SERVICE_ACCOUNT_PRIVATE_KEY_ID,
+  private_key: process.env.SERVICE_ACCOUNT_PRIVATE_KEY,
+  client_email: process.env.SERVICE_ACCOUNT_CLIENT_EMAIL,
+  client_id: process.env.SERVICE_ACCOUNT_CLIENT_ID,
+  auth_uri: process.env.SERVICE_ACCOUNT_AUTH_ID,
+  token_uri: process.env.SERVICE_ACCOUNT_TOKEN_URI,
+  auth_provider_x509_cert_url:
+    process.env.SERVICE_ACCOUNT_AUTH_PROVIDER_x509_CERT_URL,
+  client_x509_cert_url: process.env.SERVICE_ACCOUNT_CLIENT_x509_CERT_URL,
+  universe_domain: process.env.SERVICE_ACCOUNT_UNIVERSE_DOMAIN,
+};
+admin.initializeApp({
+  credential: admin.credential.cert(serviceAccount),
+  storageBucket: "gs://eabha-foundation.appspot.com",
+});
+const bucket = admin.storage().bucket();
+
 const tryCatchMethod = async (method) => {
   const response = { status: false, statusCode: 200, errors: {}, data: [] };
 
@@ -68,10 +90,69 @@ const getTokenMemberData = async (tokenId) => {
     return tokenMemberData;
   } catch (error) {}
 };
+
+const uploadFile = async (file) => {
+  let imageUrl = null;
+
+  const filePath = file.filepath;
+  const fileOriginalName = file.originalFilename; // Original filename with extension
+  const remoteFilePath = `images/${file.newFilename}_${fileOriginalName}`;
+  console.log(remoteFilePath);
+  try {
+    // Upload file to Firebase Storage
+    await bucket.upload(filePath, {
+      destination: remoteFilePath,
+      metadata: {
+        contentType: file.mimetype, // Set content type
+      },
+    });
+    // Make the file public
+    await bucket.file(remoteFilePath).makePublic();
+    imageUrl = `https://storage.googleapis.com/${bucket.name}/${remoteFilePath}`;
+  } catch (error) {
+    console.error("Failed to upload file:", error);
+  }
+  return imageUrl;
+};
+const deleteFile = async (url) => {
+  try {
+    const file = bucket.file(url);
+    await file.delete();
+  } catch (error) {
+    console.error("Failed to upload file:", error);
+  }
+};
+
+const maxAge = 2 * 60 * 60;
+
+const MAX_FILE_SIZE_MB = 1; // Maximum file size in MB
+const MAX_FILE_SIZE_BYTES = MAX_FILE_SIZE_MB * 1024 * 1024; // Convert
+const handleGetTokenExpiryDateAndTime = () => {
+  const expiryTimeMs = maxAge * 1000;
+  const expiryDateTime = new Date(Date.now() + expiryTimeMs);
+  const formattedExpiryDateTime = expiryDateTime.toISOString();
+  return formattedExpiryDateTime;
+};
+const getBooleanFromObject = (data = {}) => {
+  const hasValue = Object.values(data).length > 0;
+  return hasValue;
+};
+
+const comparePassword = async (oldPassword, newPassword) => {
+  const auth = await bcrypt.compare(oldPassword, newPassword);
+  return auth;
+};
 module.exports = {
+  uploadFile,
+  deleteFile,
   tryCatchMethod,
   createToken,
+  handleGetTokenExpiryDateAndTime,
   compareObjectIds,
   convertStringIdToObjectId,
   getTokenMemberData,
+  maxAge,
+  MAX_FILE_SIZE_BYTES,
+  getBooleanFromObject,
+  comparePassword,
 };

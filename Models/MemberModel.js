@@ -1,8 +1,5 @@
 const mongoose = require("mongoose");
-const groupsSchema = mongoose.Schema({
-  _id: mongoose.Types.ObjectId,
-  groupId: mongoose.Types.ObjectId,
-});
+
 const memberSchema = mongoose.Schema(
   {
     firstName: {
@@ -16,6 +13,9 @@ const memberSchema = mongoose.Schema(
     profile: {
       type: String,
       required: true,
+    },
+    phone: {
+      type: Number,
     },
     email: {
       type: String,
@@ -36,7 +36,7 @@ const memberSchema = mongoose.Schema(
     },
     groups: {
       type: Array,
-      default: [groupsSchema],
+      default: [],
     },
   },
   { timestamps: true }

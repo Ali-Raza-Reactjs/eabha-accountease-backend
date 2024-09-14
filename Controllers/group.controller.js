@@ -5,19 +5,46 @@ const { convertStringIdToObjectId } = require("../Utils/utils");
 const GroupMembersExpensesModel = require("../Models/GroupMembersExpensesModel");
 const ExpenseModel = require("../Models/ExpenseModel");
 const ReceivedAmountHistoryModel = require("../Models/ReceivedAmountHistoryModel");
+const MemberModel = require("../Models/MemberModel");
 
 const getAllGroups = async (req, res) => {
   let apiResponse = new ApiResponseModel();
+
   try {
-    const data = await GroupModel.find({});
+    const tokenMemberData = await MemberModel.findOne({ userId: req.tokenId });
+
+    const tokenMemberdGroupIdsArr = tokenMemberData.groups.map(
+      (dt) => dt.groupId
+    );
+    const tokenMemberdGroupBalanceObj = tokenMemberData.groups.reduce(
+      (acc, curr) => {
+        acc[curr.groupId] = curr.balance;
+        return acc;
+      },
+      {}
+    );
+
+    const data = await GroupModel.aggregate([
+      {
+        $match: {
+          _id: { $in: tokenMemberdGroupIdsArr },
+        },
+      },
+    ]);
     if (data) {
       apiResponse.status = true;
-      apiResponse.data = data;
+      apiResponse.data = data.map((dt) => {
+        return {
+          ...dt,
+          balance: tokenMemberdGroupBalanceObj[dt._id],
+        };
+      });
     } else {
       apiResponse.msg = "No groups found";
     }
     res.status(200).json(apiResponse);
   } catch (error) {
+    console.log(error);
     apiResponse.errors = error;
     res.status(500).json(apiResponse);
   }
@@ -54,7 +81,8 @@ const addGroup = async (req, res) => {
         const _name = name[0] || "";
         const _img = img[0] || "";
         const _members = members[0] || "";
-        const mappedMembers = _members.split(",").map((dt) => {
+        const membersIds = _members.split(",");
+        const mappedMembers = membersIds.map((dt) => {
           return { memberId: convertStringIdToObjectId(dt) };
         });
         const data = await GroupModel.create({
@@ -73,6 +101,12 @@ const addGroup = async (req, res) => {
           };
         });
         await GroupMembersExpensesModel.insertMany(membersExpenseData);
+        await MemberModel.updateMany(
+          { _id: { $in: membersIds } }, // Filter criteria: match documents where the _id is in membersIds
+          {
+            $push: { groups: { groupId: data._id } }, // Update operation: push a new object into the groups array
+          }
+        );
 
         if (data) {
           apiResponse.status = true;
