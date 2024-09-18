@@ -3,6 +3,9 @@ const { ApiResponseModel } = require("../Utils/classes");
 const { transactionTypesEnum } = require("../Utils/enum");
 const MembersTransactionModel = require("../Models/MembersTransactionModel");
 const MemberModel = require("../Models/MemberModel");
+const MembersLoanTransactionModel = require("../Models/MembersLoanTransactionModel");
+const _enum = require("../Utils/enum");
+const { convertStringIdToObjectId } = require("../Utils/utils");
 
 const getTransactionTypes = async (req, res) => {
   let apiResponse = new ApiResponseModel();
@@ -109,6 +112,50 @@ const addTransaction = async (req, res) => {
     res.status(500).send(apiResponse);
   }
 };
+const addLoanTransaction = async (req, res) => {
+  let apiResponse = new ApiResponseModel();
+  const { type, amount } = req.body;
+  try {
+    const memberData = await MemberModel.findOne({ userId: req.tokenId });
+    const memberId = memberData._id;
+
+    const history = await MembersLoanTransactionModel.create({
+      ...req.body,
+      date: _enum.dateEnum.currentDate,
+      memberId: memberId,
+    });
+
+    await MemberModel.findOneAndUpdate(
+      { userId: req.tokenId },
+      {
+        $inc: {
+          loan:
+            type === _enum.transactionTypesEnum.TAKE_A_LOAN ? amount : -amount,
+        },
+      },
+      { new: true } // Option to return the updated document
+    );
+
+    if (history) {
+      apiResponse.status = true;
+      apiResponse.msg = "Transaction Added Successfully";
+      apiResponse.data = history;
+    }
+    return res.status(200).json(apiResponse);
+  } catch (error) {
+    if (error.name === "ValidationError") {
+      let errors = {};
+      Object.keys(error.errors).forEach((key) => {
+        errors[key] = error.errors[key].message;
+      });
+      apiResponse.errors = errors;
+      return res.status(200).json(apiResponse);
+    }
+    console.log(error);
+    apiResponse.errors = error;
+    res.status(500).send(apiResponse);
+  }
+};
 const updateTransaction = async (req, res) => {
   const {
     transactionId,
@@ -203,25 +250,18 @@ const getMemberTransactionDetails = async (req, res) => {
   }
 
   if (type) {
-    if (type === transactionTypesEnum.SPENT) {
-      typeMatchQuery = {
-        $or: [
-          {
-            type: {
-              $in: [
-                transactionTypesEnum.SPENT,
-                transactionTypesEnum.GIVE_A_LOAN,
-              ],
-            },
-          },
-          { additionalType: type },
+    typeMatchQuery = {
+      type: type,
+    };
+  } else {
+    typeMatchQuery = {
+      type: {
+        $in: [
+          _enum.transactionTypesEnum.RECEIVED,
+          _enum.transactionTypesEnum.SPENT,
         ],
-      };
-    } else {
-      typeMatchQuery = {
-        $or: [{ type: type }, { additionalType: type }],
-      };
-    }
+      },
+    };
   }
   if (categories) {
     const categoriesArr = categories.split(",").map(Number);
@@ -308,7 +348,7 @@ const getMemberTransactionDetails = async (req, res) => {
         },
       },
     ]);
-    const [membersReceivableAndLoanAmountDetail] =
+    const [membersReceivableAmountDetail] =
       await MembersTransactionModel.aggregate([
         {
           $match: { memberId },
@@ -316,56 +356,47 @@ const getMemberTransactionDetails = async (req, res) => {
         {
           $group: {
             _id: null,
-            totalLoanAmount: {
+            totalReceivableAmount: {
               $sum: {
                 $cond: {
                   if: {
-                    $or: [
-                      { $eq: ["$type", transactionTypesEnum.TAKE_A_LOAN] },
-                      {
-                        $eq: [
-                          "$additionalType",
-                          transactionTypesEnum.TAKE_A_LOAN,
-                        ],
-                      },
-                    ],
+                    $eq: ["$type", transactionTypesEnum.RECEIVABLE],
                   },
                   then: "$amount",
-                  else: {
-                    $cond: {
-                      if: {
-                        $or: [
-                          {
-                            $eq: ["$type", transactionTypesEnum.REPAY_A_LOAN],
-                          },
-                          {
-                            $eq: [
-                              "$additionalType",
-                              transactionTypesEnum.REPAY_A_LOAN,
-                            ],
-                          },
-                        ],
-                      },
-                      then: { $multiply: ["$amount", -1] }, // Subtract by multiplying by -1
-                      else: 0,
-                    },
-                  },
+                  else: 0,
                 },
               },
             },
-            totalPendingAmount: {
+          },
+        },
+      ]);
+
+    const [membersTotalAmountBetweenDates] =
+      await MembersLoanTransactionModel.aggregate([
+        {
+          $match: {
+            $and: [dateMathQuery, { memberId }],
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            totalLoanAmoutBetweenDates: {
               $sum: {
                 $cond: {
                   if: {
-                    $or: [
-                      { $eq: ["$type", transactionTypesEnum.RECEIVABLE] },
-                      {
-                        $eq: [
-                          "$additionalType",
-                          transactionTypesEnum.RECEIVABLE,
-                        ],
-                      },
-                    ],
+                    $eq: ["$type", transactionTypesEnum.TAKE_A_LOAN],
+                  },
+                  then: "$amount",
+                  else: 0,
+                },
+              },
+            },
+            totalRepaidAmoutBetweenDates: {
+              $sum: {
+                $cond: {
+                  if: {
+                    $eq: ["$type", transactionTypesEnum.REPAY_A_LOAN],
                   },
                   then: "$amount",
                   else: 0,
@@ -378,8 +409,68 @@ const getMemberTransactionDetails = async (req, res) => {
     apiResponse.status = true;
     apiResponse.data = {
       membersTransactionDetail,
-      membersReceivableAndLoanAmountDetail,
+      totalReceivableAmount:
+        membersReceivableAmountDetail?.totalReceivableAmount || 0,
+      totalLaonAmount: memberData.loan,
+
+      totalLaonAmountBetweenDates:
+        membersTotalAmountBetweenDates?.totalLoanAmoutBetweenDates || 0,
+      totalRepaidAmountBetweenDates:
+        membersTotalAmountBetweenDates?.totalRepaidAmoutBetweenDates || 0,
     };
+    res.status(200).json(apiResponse);
+  } catch (error) {
+    console.log(error);
+    apiResponse.errors = error;
+    res.status(500).send(apiResponse);
+  }
+};
+const getMemberTransactionLoanDetails = async (req, res) => {
+  const apiResponse = new ApiResponseModel();
+  try {
+    const memberData = await MemberModel.findOne({ userId: req.tokenId });
+    const memberId = memberData._id;
+    const membersLoanTransactionDetail =
+      await MembersLoanTransactionModel.aggregate([
+        {
+          $match: {
+            memberId,
+          },
+        },
+        {
+          $lookup: {
+            from: "transactionTypes", // Collection name
+            localField: "type",
+            foreignField: "transactionTypeId",
+            as: "transactionsTypes",
+          },
+        },
+        { $unwind: "$transactionsTypes" },
+
+        {
+          $addFields: {
+            transactionTypeId: "$transactionsTypes.transactionTypeId",
+            transactionTypeName: "$transactionsTypes.transactionTypeName",
+            additionalTransactionTypeId:
+              "$additionalTransactionTypes.transactionTypeId",
+            additionalTransactionTypeName:
+              "$additionalTransactionTypes.transactionTypeName",
+            transactionCategoryId:
+              "$transactionCategories.transactionCategoryId",
+            transactionCategoryName:
+              "$transactionCategories.transactionCategoryName",
+          },
+        },
+        { $sort: { createdAt: -1 } },
+        {
+          $project: {
+            transactionsTypes: 0,
+          },
+        },
+      ]);
+
+    apiResponse.status = true;
+    apiResponse.data = membersLoanTransactionDetail;
     res.status(200).json(apiResponse);
   } catch (error) {
     apiResponse.errors = error;
@@ -407,12 +498,48 @@ const deleteTransaction = async (req, res) => {
     return res.status(500).send(apiResponse);
   }
 };
+const revertLoanTransaction = async (req, res) => {
+  let apiResponse = new ApiResponseModel();
+  const { transactionId } = req.body;
+  try {
+    const transactionDetails = await MembersLoanTransactionModel.findById(
+      transactionId
+    );
+    await MemberModel.findOneAndUpdate(
+      { userId: req.tokenId },
+      {
+        $inc: {
+          loan:
+            transactionDetails.type === _enum.transactionTypesEnum.TAKE_A_LOAN
+              ? -transactionDetails.amount
+              : transactionDetails.amount,
+        },
+      },
+      { new: true } // Option to return the updated document
+    );
+    const deleted = await MembersLoanTransactionModel.findOneAndDelete({
+      _id: transactionId,
+    });
+    if (deleted) {
+      apiResponse.status = true;
+      apiResponse.msg = "Transaction reverted successfully";
+    }
+    apiResponse.msg = "Transaction not found";
+    return res.status(200).json(apiResponse);
+  } catch (error) {
+    apiResponse.errors = error;
+    return res.status(500).send(apiResponse);
+  }
+};
 
 module.exports = {
   getTransactionTypes,
   getTransactionCategories,
   addTransaction,
+  addLoanTransaction,
   updateTransaction,
   getMemberTransactionDetails,
+  getMemberTransactionLoanDetails,
   deleteTransaction,
+  revertLoanTransaction,
 };

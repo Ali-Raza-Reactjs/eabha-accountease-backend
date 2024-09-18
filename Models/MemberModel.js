@@ -38,6 +38,10 @@ const memberSchema = mongoose.Schema(
       type: Array,
       default: [],
     },
+    loan: {
+      type: Number,
+      default: 0,
+    },
   },
   { timestamps: true }
 );

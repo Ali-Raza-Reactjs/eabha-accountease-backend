@@ -1,12 +1,12 @@
 const mongoose = require("mongoose");
-const membersTransactionSchema = mongoose.Schema(
+const membersLoanTransactionSchema = mongoose.Schema(
   {
-    memberId: {
-      type: mongoose.Types.ObjectId,
-      required: true,
-    },
     date: {
       type: Date,
+      required: true,
+    },
+    memberId: {
+      type: mongoose.Types.ObjectId,
       required: true,
     },
     amount: {
@@ -17,11 +17,6 @@ const membersTransactionSchema = mongoose.Schema(
       type: Number,
       required: true,
     },
-    category: {
-      type: Number,
-      required: false,
-      default: 0,
-    },
     comment: {
       type: String,
       required: true,
@@ -31,6 +26,6 @@ const membersTransactionSchema = mongoose.Schema(
 );
 
 module.exports = mongoose.model(
-  "members_transactions",
-  membersTransactionSchema
+  "members_loan_transactions",
+  membersLoanTransactionSchema
 );
