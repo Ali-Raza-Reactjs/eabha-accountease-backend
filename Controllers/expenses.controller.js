@@ -775,7 +775,45 @@ const updateExpense = async (req, res) => {
       }
       // Perform the bulkWrite operation
       await GroupMembersExpensesModel.bulkWrite(updates);
-
+      const [data] = await GroupMembersExpensesModel.aggregate([
+        { $match: { groupId: convertStringIdToObjectId(groupId) } },
+        {
+          $group: {
+            _id: null,
+            membersBalanceArray: {
+              $push: {
+                k: { $toString: "$memberId" }, // Convert memberId to string to use as a key
+                v: "$expenseBalance", // Balance as the value
+              },
+            },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+            membersBalance: { $arrayToObject: "$membersBalanceArray" },
+          },
+        },
+        {
+          $replaceRoot: { newRoot: "$membersBalance" },
+        },
+      ]);
+      const memberBalanceUpdateOperation = Object.keys(data).map(
+        (memberId) => ({
+          updateOne: {
+            filter: {
+              _id: convertStringIdToObjectId(memberId),
+              "groups.groupId": convertStringIdToObjectId(groupId),
+            },
+            update: {
+              $set: {
+                "groups.$.balance": data[memberId],
+              },
+            },
+          },
+        })
+      );
+      await MemberModel.bulkWrite(memberBalanceUpdateOperation);
       if (updatedData) {
         apiResponse.status = true;
         apiResponse.msg = "Expense updated successfully";

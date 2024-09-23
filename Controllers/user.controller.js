@@ -121,10 +121,10 @@ const sigup = async (req, res) => {
 };
 
 const signin = async (req, res, next) => {
-  const { username, password } = req.body;
+  const { usernameOrEmail, password } = req.body;
   let apiResponse = new ApiResponseModel();
   try {
-    const userResponse = await UserModel.findOne({ username });
+    const userResponse = await UserModel.findOne({ username: usernameOrEmail });
     // check user exist
     if (userResponse) {
       const auth = await comparePassword(password, userResponse.password);
@@ -166,8 +166,48 @@ const signin = async (req, res, next) => {
         return res.status(200).json(apiResponse);
       }
     } else {
-      apiResponse.msg = "Username Not Found";
-      return res.status(200).json(apiResponse);
+      const memberResponse = await MemberModel.findOne({
+        email: usernameOrEmail,
+      });
+      const user = await UserModel.findById(memberResponse.userId);
+      const auth = await comparePassword(password, user.password);
+      // check password
+      if (auth) {
+        const memberResponse = await MemberModel.findOne({
+          userId: user?._id,
+        });
+        const token = createToken(user._id);
+        const tokenExpiryDateTime = handleGetTokenExpiryDateAndTime();
+        res.cookie("jwt", token, {
+          withCredentials: true, // Corrected typo
+          httpOnly: false,
+          maxAge: maxAge * 1000,
+        });
+        if (memberResponse) {
+          if (memberResponse?.isEmailVerified) {
+            apiResponse.status = true;
+            apiResponse.msg = "Login successful";
+            apiResponse.data = {
+              isEmailVerified: true,
+              user: memberResponse,
+              accessToken: token,
+              expiryDateTime: tokenExpiryDateTime,
+            };
+            return res.status(200).json(apiResponse);
+          } else {
+            apiResponse.msg = "User not verified";
+            apiResponse.data = {
+              email: memberResponse.email,
+              isEmailVerified: false,
+            };
+            return res.status(200).json(apiResponse);
+          }
+        }
+        return res.status(200).json(apiResponse);
+      } else {
+        apiResponse.msg = "Incorrect password";
+        return res.status(200).json(apiResponse);
+      }
     }
   } catch (error) {
     console.log(error);
@@ -222,10 +262,10 @@ const sendVerificationOtp = async (req, res) => {
 const sendPasswordUpdateVerificationOtp = async (req, res) => {
   let apiResponse = new ApiResponseModel();
   try {
-    const { username } = req.body;
-    const userData = await UserModel.findOne({ username });
-    const memberData = await MemberModel.findOne({ userId: userData?._id });
+    const { usernameOrEmail } = req.body;
+    const userData = await UserModel.findOne({ username: usernameOrEmail });
     if (userData) {
+      const memberData = await MemberModel.findOne({ userId: userData?._id });
       const otp = otpGenerator.generate(4, {
         upperCaseAlphabets: false,
         lowerCaseAlphabets: false,
@@ -257,6 +297,41 @@ const sendPasswordUpdateVerificationOtp = async (req, res) => {
       };
       return res.status(200).json(apiResponse);
     } else {
+      const memberResponse = await MemberModel.findOne({
+        email: usernameOrEmail,
+      });
+      if (memberResponse) {
+        const otp = otpGenerator.generate(4, {
+          upperCaseAlphabets: false,
+          lowerCaseAlphabets: false,
+          specialChars: false,
+        });
+
+        let result = await OTPModel.findOne({ otp: otp });
+        while (result) {
+          otp = otpGenerator.generate(6, {
+            upperCaseAlphabets: false,
+          });
+          result = await OTPModel.findOne({ otp: otp });
+        }
+        const otpPayload = {
+          email: memberResponse.email,
+          otp,
+          userId: memberResponse.userId,
+        };
+        const otpBody = await OTPModel.create(otpPayload);
+        const token = createToken(memberResponse.userId);
+        const tokenExpiryDateTime = handleGetTokenExpiryDateAndTime();
+        apiResponse.status = true;
+        apiResponse.msg = "OTP sent successfully";
+        apiResponse.id = memberResponse.userId;
+        apiResponse.data = {
+          accessToken: token,
+          expiryDateTime: tokenExpiryDateTime,
+          otp: otpBody,
+        };
+        return res.status(200).json(apiResponse);
+      }
       apiResponse.msg = "User Not Found";
       return res.status(200).json(apiResponse);
     }

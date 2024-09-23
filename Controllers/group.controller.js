@@ -186,27 +186,66 @@ const updateGroup = async (req, res) => {
             return dt.memberId;
           });
 
-        await GroupMembersExpensesModel.deleteMany({
-          groupId: convertStringIdToObjectId(_groupId),
-          memberId: { $in: willDeletedMembers },
-        });
+        const [selectedGroup] = await GroupMembersExpensesModel.aggregate([
+          {
+            $match: {
+              $and: [
+                {
+                  groupId: convertStringIdToObjectId(_groupId),
+                },
+                {
+                  memberId: { $in: willDeletedMembers },
+                },
+              ],
+            },
+          },
+          {
+            $project: {
+              isAllMembersBalanceZero: {
+                $cond: {
+                  if: {
+                    $eq: ["$expenseBalance", 0],
+                  },
+                  then: true,
+                  else: false,
+                },
+              },
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              isDeleteAble: { $first: "$isAllMembersBalanceZero" },
+            },
+          },
+        ]);
 
-        await GroupMembersExpensesModel.insertMany(
-          willAddedAsNewMembersExpenseData
-        );
-        const data = await GroupModel.findByIdAndUpdate(groupId, {
-          img: _img,
-          name: _name,
-          members: mappedMembers,
-          updatedBy: req.tokenId,
-        });
+        if (selectedGroup ? selectedGroup?.isDeleteAble : true) {
+          await GroupMembersExpensesModel.deleteMany({
+            groupId: convertStringIdToObjectId(_groupId),
+            memberId: { $in: willDeletedMembers },
+          });
 
-        if (data) {
-          apiResponse.status = true;
-          apiResponse.msg = "Group updated successfully";
-          apiResponse.data = data;
+          await GroupMembersExpensesModel.insertMany(
+            willAddedAsNewMembersExpenseData
+          );
+          const data = await GroupModel.findByIdAndUpdate(groupId, {
+            img: _img,
+            name: _name,
+            members: mappedMembers,
+            updatedBy: req.tokenId,
+          });
+
+          if (data) {
+            apiResponse.status = true;
+            apiResponse.msg = "Group updated successfully";
+            apiResponse.data = data;
+          } else {
+            apiResponse.msg = "Can't update group";
+          }
         } else {
-          apiResponse.msg = "Can't update group";
+          apiResponse.msg =
+            "You can't exclude friends who have a balance in this group.";
         }
         return res.status(200).json(apiResponse);
       } catch (error) {
@@ -263,23 +302,56 @@ const deleteGroup = async (req, res) => {
       },
     ]);
     if (selectedGroup.isDeleteAble) {
-      const data = await GroupModel.findByIdAndDelete(groupId);
-      await GroupMembersExpensesModel.deleteMany({
-        groupId: convertStringIdToObjectId(groupId),
-      });
-      await ExpenseModel.deleteMany({
-        groupId: convertStringIdToObjectId(groupId),
-      });
-      await ReceivedAmountHistoryModel.deleteMany({
-        groupId: convertStringIdToObjectId(groupId),
-      });
+      const [groupMembers] = await GroupModel.aggregate([
+        {
+          $match: {
+            _id: convertStringIdToObjectId(groupId),
+          },
+        },
+        {
+          $unwind: {
+            path: "$members",
+            preserveNullAndEmptyArrays: true,
+          },
+        },
+        {
+          $group: {
+            _id: null,
+            members: {
+              $push: "$members.memberId",
+            },
+          },
+        },
+        {
+          $project: {
+            _id: 0,
+          },
+        },
+      ]);
 
+      const data = await GroupModel.findByIdAndDelete(groupId);
       if (data) {
+        await MemberModel.updateMany(
+          {
+            _id: { $in: groupMembers?.members },
+          },
+          { $pull: { groups: { groupId: convertStringIdToObjectId(groupId) } } }
+        );
+        await GroupMembersExpensesModel.deleteMany({
+          groupId: convertStringIdToObjectId(groupId),
+        });
+        await ExpenseModel.deleteMany({
+          groupId: convertStringIdToObjectId(groupId),
+        });
+        await ReceivedAmountHistoryModel.deleteMany({
+          groupId: convertStringIdToObjectId(groupId),
+        });
+
         apiResponse.status = true;
         apiResponse.msg = "Group deleted successfully";
         return res.status(200).json(apiResponse);
       }
-
+      apiResponse.data = data;
       apiResponse.msg = "Can't delete group";
       return res.status(200).json(apiResponse);
     }
@@ -287,6 +359,7 @@ const deleteGroup = async (req, res) => {
       "You can only delete a group if each member's expense balance is zero.";
     return res.status(200).json(apiResponse);
   } catch (error) {
+    console.log(error);
     apiResponse.errors = error;
     return res.status(500).json(apiResponse);
   }

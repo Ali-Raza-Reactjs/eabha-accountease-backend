@@ -5,7 +5,6 @@ const MembersTransactionModel = require("../Models/MembersTransactionModel");
 const MemberModel = require("../Models/MemberModel");
 const MembersLoanTransactionModel = require("../Models/MembersLoanTransactionModel");
 const _enum = require("../Utils/enum");
-const { convertStringIdToObjectId } = require("../Utils/utils");
 
 const getTransactionTypes = async (req, res) => {
   let apiResponse = new ApiResponseModel();
@@ -41,60 +40,15 @@ const getTransactionCategories = async (req, res) => {
 };
 
 const addTransaction = async (req, res) => {
-  const { type, ...others } = req.body;
   let apiResponse = new ApiResponseModel();
   try {
     const memberData = await MemberModel.findOne({ userId: req.tokenId });
     const memberId = memberData._id;
-    let history;
-    if (type === transactionTypesEnum.GIVE_A_LOAN) {
-      history = await MembersTransactionModel.insertMany([
-        {
-          ...others,
-          memberId: memberId,
-          type: transactionTypesEnum.GIVE_A_LOAN,
-          additionalType: transactionTypesEnum.RECEIVABLE,
-        },
-      ]);
-    } else if (type === transactionTypesEnum.TAKE_A_LOAN) {
-      history = await MembersTransactionModel.insertMany([
-        {
-          ...others,
-          memberId: memberId,
-          type: transactionTypesEnum.TAKE_A_LOAN,
-          additionalType: transactionTypesEnum.RECEIVED,
-        },
-      ]);
-    } else if (type === transactionTypesEnum.REPAY_A_LOAN) {
-      history = await MembersTransactionModel.insertMany([
-        {
-          memberId: memberId,
-          type: transactionTypesEnum.REPAY_A_LOAN,
-          additionalType: transactionTypesEnum.SPENT,
-          ...others,
-        },
-      ]);
-    } else if (req.body.payLoan) {
-      history = await MembersTransactionModel.insertMany([
-        {
-          type: transactionTypesEnum.RECEIVED,
-          memberId: memberId,
-          ...others,
-        },
-        {
-          memberId: memberId,
-          type: transactionTypesEnum.REPAY_A_LOAN,
-          additionalType: transactionTypesEnum.SPENT,
-          ...others,
-        },
-      ]);
-    } else {
-      history = await MembersTransactionModel.create({
-        memberId: memberId,
-        type,
-        ...others,
-      });
-    }
+
+    const history = await MembersTransactionModel.create({
+      memberId: memberId,
+      ...req.body,
+    });
     apiResponse.status = true;
     apiResponse.msg = "Transaction Added Successfully";
     apiResponse.data = history;
@@ -157,55 +111,15 @@ const addLoanTransaction = async (req, res) => {
   }
 };
 const updateTransaction = async (req, res) => {
-  const {
-    transactionId,
-    date,
-    amount,
-    type,
-    additionalType,
-    category,
-    comment,
-  } = req.body;
+  const { transactionId, date, amount, type, category, comment } = req.body;
   let apiResponse = new ApiResponseModel();
   try {
-    const oldTransaction = await MembersTransactionModel.findById(
-      transactionId
-    );
-    // if give a loan type
-    let _additionalType = oldTransaction.additionalType;
-    // received case
-    if (type === transactionTypesEnum.RECEIVED) {
-      _additionalType = 0;
-    }
-    // receivable case
-    if (type === transactionTypesEnum.RECEIVABLE) {
-      _additionalType = 0;
-    }
-    // spent case
-    if (type === transactionTypesEnum.SPENT) {
-      _additionalType = 0;
-    }
-    //  give a loan case
-    if (type === transactionTypesEnum.GIVE_A_LOAN) {
-      _additionalType = transactionTypesEnum.RECEIVABLE;
-      _additionalType = additionalType;
-    }
-    // take a loan case
-    if (type === transactionTypesEnum.TAKE_A_LOAN) {
-      _additionalType = transactionTypesEnum.RECEIVED;
-    }
-    // pay a loan case
-    if (type === transactionTypesEnum.REPAY_A_LOAN) {
-      _additionalType = transactionTypesEnum.SPENT;
-    }
-
     const updatedTansaction = await MembersTransactionModel.findOneAndUpdate(
       { _id: transactionId },
       {
         date,
         amount,
         type,
-        additionalType: _additionalType,
         category,
         comment,
       },
@@ -336,7 +250,7 @@ const getMemberTransactionDetails = async (req, res) => {
             "$transactionCategories.transactionCategoryName",
         },
       },
-      { $sort: { date: -1, createdAt: -1 } },
+      { $sort: { date: -1, createdAt: -1, updatedAt: -1 } },
       {
         $project: {
           transactionsTypes: 0,
@@ -531,7 +445,6 @@ const revertLoanTransaction = async (req, res) => {
     return res.status(500).send(apiResponse);
   }
 };
-
 module.exports = {
   getTransactionTypes,
   getTransactionCategories,

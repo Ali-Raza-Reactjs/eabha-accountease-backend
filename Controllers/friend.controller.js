@@ -58,20 +58,24 @@ const addFriends = async (req, res) => {
   try {
     const tokenMemberData = await MemberModel.findOne({ userId: req.tokenId });
     const oldFriends = tokenMemberData.friends;
-    const newFriends = friends
-      .split(",")
-      .filter((x) => !oldFriends.some((dt) => String(dt.memberId) === x))
-      .map((dt) => {
-        return { memberId: convertStringIdToObjectId(dt) };
-      });
-    tokenMemberData.friends = [...oldFriends, ...newFriends];
-    const data = await tokenMemberData.save();
-    if (data) {
-      apiResponse.status = true;
-      apiResponse.msg = "Friend(s) added successfully";
-      apiResponse.data = data;
+    if (friends) {
+      const newFriends = friends
+        .split(",")
+        .filter((x) => !oldFriends.some((dt) => String(dt.memberId) === x))
+        .map((dt) => {
+          return { memberId: convertStringIdToObjectId(dt) };
+        });
+      tokenMemberData.friends = [...oldFriends, ...newFriends];
+      const data = await tokenMemberData.save();
+      if (data) {
+        apiResponse.status = true;
+        apiResponse.msg = "Friend(s) added successfully";
+        apiResponse.data = data;
+      } else {
+        apiResponse.msg = "Can't add friend(s)";
+      }
     } else {
-      apiResponse.msg = "Can't add friend(s)";
+      apiResponse.msg = "Invalid friend(s)";
     }
     res.status(200).json(apiResponse);
   } catch (error) {
