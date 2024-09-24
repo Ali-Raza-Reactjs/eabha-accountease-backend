@@ -30,6 +30,82 @@ const getAllGroups = async (req, res) => {
           _id: { $in: tokenMemberdGroupIdsArr },
         },
       },
+
+      {
+        $lookup: {
+          from: "members",
+          localField: "createdBy",
+          foreignField: "userId",
+          as: "createdByMembersData",
+        },
+      },
+      {
+        $lookup: {
+          from: "members",
+          localField: "updatedBy",
+          foreignField: "userId",
+          as: "updatedByMembersData",
+        },
+      },
+      {
+        $unwind: "$createdByMembersData",
+      },
+      {
+        $unwind: {
+          path: "$updatedByMembersData",
+          preserveNullAndEmptyArrays: true,
+        },
+      },
+      {
+        $addFields: {
+          createdByName: {
+            $concat: [
+              { $ifNull: ["$createdByMembersData.firstName", ""] },
+              " ",
+              { $ifNull: ["$createdByMembersData.lastName", ""] },
+              {
+                $cond: [
+                  {
+                    $eq: [
+                      "$createdByMembersData.userId",
+                      convertStringIdToObjectId(req.tokenId),
+                    ],
+                  },
+                  " (You)",
+                  "",
+                ],
+              },
+            ],
+          },
+          updatedByName: {
+            $concat: [
+              { $ifNull: ["$updatedByMembersData.firstName", ""] },
+              " ",
+              { $ifNull: ["$updatedByMembersData.lastName", ""] },
+              {
+                $cond: [
+                  {
+                    $eq: [
+                      "$updatedByMembersData.userId",
+                      convertStringIdToObjectId(req.tokenId),
+                    ],
+                  },
+                  " (You)",
+                  "",
+                ],
+              },
+            ],
+          },
+        },
+      },
+      {
+        $project: {
+          createdByMembersData: 0,
+          updatedByMembersData: 0,
+          createdBy: 0,
+          updatedBy: 0,
+        },
+      },
     ]);
     if (data) {
       apiResponse.status = true;
