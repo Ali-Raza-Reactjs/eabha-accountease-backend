@@ -343,14 +343,13 @@ const sendPasswordUpdateVerificationOtp = async (req, res) => {
 };
 
 const VerifyOtp = async (req, res) => {
-  const { email, otp } = req.body;
-  console.log(req.body);
+  const { usernameOrEmail, otp } = req.body;
   let apiResponse = new ApiResponseModel();
   try {
-    const data = await OTPModel.findOne({ email, otp });
+    const data = await OTPModel.findOne({ email: usernameOrEmail, otp });
     if (data) {
       await MemberModel.findOneAndUpdate(
-        { email },
+        { email: usernameOrEmail },
         {
           isEmailVerified: true,
         }
@@ -358,9 +357,28 @@ const VerifyOtp = async (req, res) => {
       apiResponse.status = true;
       apiResponse.data = data;
       apiResponse.msg = "OTP verified successfully";
+      return res.status(200).json(apiResponse);
+    } else {
+      const userResponse = await UserModel.findOne({
+        username: usernameOrEmail,
+      });
+      if (userResponse) {
+        const data = await OTPModel.findOne({ userId: userResponse._id, otp });
+        if (data) {
+          await MemberModel.findOneAndUpdate(
+            { email: usernameOrEmail },
+            {
+              isEmailVerified: true,
+            }
+          );
+          apiResponse.status = true;
+          apiResponse.data = data;
+          apiResponse.msg = "OTP verified successfully";
+        }
+      }
+      apiResponse.msg = "Invalid OTP";
+      return res.status(200).json(apiResponse);
     }
-    apiResponse.msg = "Invalid OTP";
-    return res.status(200).json(apiResponse);
   } catch (error) {
     console.log(error);
     apiResponse.errors = error;
