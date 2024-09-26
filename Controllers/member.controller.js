@@ -10,13 +10,14 @@ const {
   uploadFile,
   comparePassword,
 } = require("../Utils/utils");
+const GroupMembersExpensesModel = require("../Models/GroupMembersExpensesModel");
 
-const getMemberUsingEmail = async (req, res) => {
-  const { email } = req.params;
+const getMemberUsingUsernameOrEmail = async (req, res) => {
+  const { usernameOrEmail } = req.params;
   let apiResponse = new ApiResponseModel();
   try {
     const tokenMemberData = await MemberModel.findOne({ userId: req.tokenId });
-    const memberData = await MemberModel.findOne({ email });
+    const memberData = await MemberModel.findOne({ email: usernameOrEmail });
 
     if (memberData) {
       if (!compareObjectIds(tokenMemberData._id, memberData._id)) {
@@ -35,7 +36,26 @@ const getMemberUsingEmail = async (req, res) => {
         apiResponse.msg = "You can't add yourself as a friend.";
       }
     } else {
-      apiResponse.msg = "No member exists with this email address.";
+      const userData = await UserModel.findOne({ username: usernameOrEmail });
+      if (userData) {
+        const memberData = await MemberModel.findOne({ userId: userData._id });
+        if (!compareObjectIds(tokenMemberData._id, memberData._id)) {
+          const checkIsAlreadyFriended = tokenMemberData.friends.some((dt) =>
+            compareObjectIds(dt.memberId, memberData._id)
+          );
+          if (checkIsAlreadyFriended) {
+            apiResponse.msg = "Already friend";
+            apiResponse.data = memberData;
+          } else {
+            apiResponse.status = true;
+            apiResponse.msg = "Member found successfully";
+            apiResponse.data = memberData;
+          }
+        } else {
+          apiResponse.msg = "You can't add yourself as a friend.";
+        }
+      }
+      apiResponse.msg = "No member exists with this username/email  address.";
     }
     res.status(200).json(apiResponse);
   } catch (error) {
@@ -44,8 +64,6 @@ const getMemberUsingEmail = async (req, res) => {
   }
 };
 const getAllMembersForAddGroup = async (req, res) => {
-  const { groupId } = req.params;
-
   let apiResponse = new ApiResponseModel();
   try {
     const tokenMemberData = await MemberModel.aggregate([
@@ -117,52 +135,52 @@ const getAllMembersForAddGroup = async (req, res) => {
       {
         $unwind: "$combinedData",
       },
-      {
-        $lookup: {
-          from: "group_members_expenses",
-          let: {
-            groupId: convertStringIdToObjectId(groupId),
-            memberId: "$combinedData._id",
-          },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $and: [
-                    { $eq: ["$groupId", "$$groupId"] },
-                    { $eq: ["$memberId", "$$memberId"] },
-                  ],
-                },
-              },
-            },
-          ],
-          as: "groupMembersExpensesData",
-        },
-      },
-      {
-        $unwind: {
-          path: "$groupMembersExpensesData",
-          preserveNullAndEmptyArrays: true,
-        },
-      },
-      {
-        $addFields: {
-          "combinedData.groupId": {
-            $cond: {
-              if: "$groupMembersExpensesData.groupId",
-              then: "$groupMembersExpensesData.groupId",
-              else: null,
-            },
-          },
-          "combinedData.expenseBalance": {
-            $cond: {
-              if: "$groupMembersExpensesData.expenseBalance",
-              then: "$groupMembersExpensesData.expenseBalance",
-              else: 0,
-            },
-          },
-        },
-      },
+      // {
+      //   $lookup: {
+      //     from: "group_members_expenses",
+      //     let: {
+      //       groupId: convertStringIdToObjectId(groupId),
+      //       memberId: "$combinedData._id",
+      //     },
+      //     pipeline: [
+      //       {
+      //         $match: {
+      //           $expr: {
+      //             $and: [
+      //               { $eq: ["$groupId", "$$groupId"] },
+      //               { $eq: ["$memberId", "$$memberId"] },
+      //             ],
+      //           },
+      //         },
+      //       },
+      //     ],
+      //     as: "groupMembersExpensesData",
+      //   },
+      // },
+      // {
+      //   $unwind: {
+      //     path: "$groupMembersExpensesData",
+      //     preserveNullAndEmptyArrays: true,
+      //   },
+      // },
+      // {
+      //   $addFields: {
+      //     "combinedData.groupId": {
+      //       $cond: {
+      //         if: "$groupMembersExpensesData.groupId",
+      //         then: "$groupMembersExpensesData.groupId",
+      //         else: null,
+      //       },
+      //     },
+      //     "combinedData.expenseBalance": {
+      //       $cond: {
+      //         if: "$groupMembersExpensesData.expenseBalance",
+      //         then: "$groupMembersExpensesData.expenseBalance",
+      //         else: 0,
+      //       },
+      //     },
+      //   },
+      // },
       {
         $replaceRoot: { newRoot: "$combinedData" },
       },
@@ -177,6 +195,116 @@ const getAllMembersForAddGroup = async (req, res) => {
     console.log(error);
     apiResponse.errors = error;
     return res.status(500).send(apiResponse);
+  }
+};
+const getAllMembersForUpdateGroup = async (req, res) => {
+  const { groupId } = req.params;
+  let apiResponse = new ApiResponseModel();
+  try {
+    const groupMembers = await GroupMembersExpensesModel.aggregate([
+      {
+        $match: {
+          groupId: convertStringIdToObjectId(groupId),
+        },
+      },
+      {
+        $lookup: {
+          from: "members",
+          localField: "memberId",
+          foreignField: "_id",
+          as: "memberData",
+        },
+      },
+      { $unwind: "$memberData" },
+      {
+        $addFields: {
+          _id: "$memberData._id",
+          "memberData.expenseBalance": "$expenseBalance",
+          firstName: "$memberData.firstName",
+          lastName: {
+            $concat: [
+              { $ifNull: ["$memberData.lastName", ""] },
+              {
+                $cond: [
+                  {
+                    $eq: [
+                      "$memberData.userId",
+                      convertStringIdToObjectId(req.tokenId),
+                    ],
+                  },
+                  " (You)",
+                  "",
+                ],
+              },
+            ],
+          },
+          profile: "$memberData.profile",
+          phone: "$memberData.phone",
+          email: "$memberData.email",
+        },
+      },
+
+      {
+        $project: {
+          memberData: 0,
+          memberId: 0,
+          balanceAdjustmentDetails: 0,
+          __v: 0,
+        },
+      },
+    ]);
+    const tokenMemberDataFriends = await MemberModel.aggregate([
+      {
+        $match: { userId: convertStringIdToObjectId(req.tokenId) },
+      },
+      {
+        $unwind: "$friends",
+      },
+      {
+        $project: {
+          _id: 0,
+          friendId: "$friends.memberId",
+        },
+      },
+      {
+        $lookup: {
+          from: "members",
+          localField: "friendId",
+          foreignField: "_id",
+          as: "friendData",
+        },
+      },
+      {
+        $unwind: "$friendData",
+      },
+      {
+        $replaceRoot: { newRoot: "$friendData" },
+      },
+      {
+        $project: {
+          friends: 0,
+          groups: 0,
+          userId: 0,
+          isEmailVerified: 0,
+          loan: 0,
+          createdAt: 0,
+          updatedAt: 0,
+          __v: 0,
+        },
+      },
+    ]);
+    const userFriendsNotInGroup = tokenMemberDataFriends.filter((dt) => {
+      return !groupMembers.some((mbr) => compareObjectIds(mbr._id, dt._id));
+    });
+    if (groupMembers) {
+      apiResponse.status = true;
+      apiResponse.data = [...groupMembers, ...userFriendsNotInGroup];
+    }
+    res.status(200).json(apiResponse);
+  } catch (error) {
+    console.log(error);
+    apiResponse.errors = error;
+    res.status(500).send(apiResponse);
   }
 };
 
@@ -328,9 +456,10 @@ const resetPassword = async (req, res) => {
   }
 };
 module.exports = {
-  getMemberUsingEmail,
+  getMemberUsingUsernameOrEmail,
   getAllMembersForAddGroup,
   getSingleMemberData,
+  getAllMembersForUpdateGroup,
   updateProfile,
   updatePassword,
   resetPassword,
