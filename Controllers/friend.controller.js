@@ -82,7 +82,7 @@ const addFriends = async (req, res) => {
 
       await MemberModel.bulkWrite(updateOperation);
       if (data) {
-        apiResponse.status = false;
+        apiResponse.status = true;
         apiResponse.msg = "Friend(s) added successfully";
         apiResponse.data = data;
       } else {
