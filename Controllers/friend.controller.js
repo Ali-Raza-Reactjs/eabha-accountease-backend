@@ -59,16 +59,30 @@ const addFriends = async (req, res) => {
     const tokenMemberData = await MemberModel.findOne({ userId: req.tokenId });
     const oldFriends = tokenMemberData.friends;
     if (friends) {
-      const newFriends = friends
+      const newFriendsList = friends
         .split(",")
-        .filter((x) => !oldFriends.some((dt) => String(dt.memberId) === x))
-        .map((dt) => {
-          return { memberId: convertStringIdToObjectId(dt) };
-        });
+        .filter((x) => !oldFriends.some((dt) => String(dt.memberId) === x));
+      const newFriends = newFriendsList.map((dt) => {
+        return { memberId: convertStringIdToObjectId(dt) };
+      });
       tokenMemberData.friends = [...oldFriends, ...newFriends];
       const data = await tokenMemberData.save();
+      const updateOperation = newFriendsList.map((_id) => ({
+        updateOne: {
+          filter: { _id },
+          update: {
+            $push: {
+              friends: {
+                memberId: tokenMemberData._id,
+              },
+            },
+          },
+        },
+      }));
+
+      await MemberModel.bulkWrite(updateOperation);
       if (data) {
-        apiResponse.status = true;
+        apiResponse.status = false;
         apiResponse.msg = "Friend(s) added successfully";
         apiResponse.data = data;
       } else {
@@ -79,6 +93,7 @@ const addFriends = async (req, res) => {
     }
     res.status(200).json(apiResponse);
   } catch (error) {
+    console.log(error);
     apiResponse.errors = error;
     res.status(500).send(apiResponse);
   }
