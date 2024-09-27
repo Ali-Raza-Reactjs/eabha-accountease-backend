@@ -71,7 +71,7 @@ const addFriends = async (req, res) => {
         updateOne: {
           filter: { _id },
           update: {
-            $push: {
+            $addToSet: {
               friends: {
                 memberId: tokenMemberData._id,
               },
@@ -79,7 +79,6 @@ const addFriends = async (req, res) => {
           },
         },
       }));
-
       await MemberModel.bulkWrite(updateOperation);
       if (data) {
         apiResponse.status = true;
@@ -106,6 +105,11 @@ const deleteFriend = async (req, res) => {
     const data = await MemberModel.updateMany(
       { userId: req.tokenId },
       { $pull: { friends: { memberId: convertStringIdToObjectId(memberId) } } }
+    );
+    const tokenMemberData = await MemberModel.findOne({ userId: req.tokenId });
+    await MemberModel.updateMany(
+      { _id: convertStringIdToObjectId(memberId) },
+      { $pull: { friends: { memberId: tokenMemberData._id } } }
     );
 
     if (data) {

@@ -43,6 +43,11 @@ const getMemberUsingUsernameOrEmail = async (req, res) => {
           const checkIsAlreadyFriended = tokenMemberData.friends.some((dt) =>
             compareObjectIds(dt.memberId, memberData._id)
           );
+          console.log(
+            tokenMemberData.friends,
+            memberData.id,
+            checkIsAlreadyFriended
+          );
           if (checkIsAlreadyFriended) {
             apiResponse.msg = "Already friend";
             apiResponse.data = memberData;
@@ -54,8 +59,9 @@ const getMemberUsingUsernameOrEmail = async (req, res) => {
         } else {
           apiResponse.msg = "You can't add yourself as a friend.";
         }
+      } else {
+        apiResponse.msg = "No member exists with this username/email  address.";
       }
-      apiResponse.msg = "No member exists with this username/email  address.";
     }
     res.status(200).json(apiResponse);
   } catch (error) {
