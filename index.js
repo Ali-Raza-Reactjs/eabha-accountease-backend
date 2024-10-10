@@ -8,7 +8,7 @@ require("dotenv").config();
 const router = require("./Routes/index");
 const { init } = require("./socket"); // Import the init function from socket.js
 const _enum = require("./Utils/enum");
-require("./Utils/cornJobs.js"); 
+require("./Utils/cornJobs.js");
 
 const app = express();
 const server = http.createServer(app);
@@ -22,12 +22,8 @@ io.on("connection", (socket) => {
 
 app.use(
   cors({
-    origin: [
-      "http://localhost:3000",
-      "http://localhost:3001",
-      "https://eabha-accountease.web.app",
-    ],
-    methods: ["GET", "POST", "DELETE"],
+    origin: _enum.corsOrigin,
+    methods: _enum.corsMethods,
     credentials: true,
   })
 );
