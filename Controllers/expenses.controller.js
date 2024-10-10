@@ -1,11 +1,14 @@
+const SharedGroupContributedAmountHistoryModel = require("../Models/SharedGroupContributedAmountHistoryModel");
 const ExpenseModel = require("../Models/ExpenseModel");
 const GroupMembersExpensesModel = require("../Models/GroupMembersExpensesModel");
 const MemberModel = require("../Models/MemberModel");
 const ReceivedAmountHistoryModel = require("../Models/ReceivedAmountHistoryModel");
+const SharedGroupMembersExpensesModel = require("../Models/SharedGroupMembersExpensesModel");
 const { ApiResponseModel } = require("../Utils/classes");
 const {
   convertStringIdToObjectId,
   getTokenMemberData,
+  handleGetDateForTime00,
 } = require("../Utils/utils");
 
 const getGroupMembersExpenses = async (req, res) => {
@@ -1051,12 +1054,259 @@ const receivedAmout = async (req, res) => {
     res.status(500).send(apiResponse);
   }
 };
+const addSharedGroupExpense = async (req, res) => {
+  let apiResponse = new ApiResponseModel();
+  try {
+    const tokenMemberData = await MemberModel.findOne({ userId: req.tokenId });
+    const reqBody = { ...req.body, memberId: tokenMemberData._id };
+    const data = await SharedGroupMembersExpensesModel.create(reqBody);
+    if (data) {
+      apiResponse.status = true;
+      apiResponse.msg = "Expenses added successfully";
+      apiResponse.data = data;
+    } else {
+      apiResponse.msg = "Error in adding expense";
+    }
+    res.status(200).json(apiResponse);
+  } catch (error) {
+    console.log(error);
+    apiResponse.errors = error;
+    res.status(500).json(apiResponse);
+  }
+};
+const updateSharedGroupExpense = async (req, res) => {
+  let apiResponse = new ApiResponseModel();
+  try {
+    // const tokenMemberData = await MemberModel.findOne({ userId: req.tokenId });
+    // const reqBody = { ...req.body, memberId: tokenMemberData._id };
+    const data = await SharedGroupMembersExpensesModel.findByIdAndUpdate(
+      req.body.expenseId,
+      req.body
+    );
+    if (data) {
+      apiResponse.status = true;
+      apiResponse.msg = "Expenses updated successfully";
+      apiResponse.data = data;
+    } else {
+      apiResponse.msg = "Error in updating expense";
+    }
+    res.status(200).json(apiResponse);
+  } catch (error) {
+    console.log(error);
+    apiResponse.errors = error;
+    res.status(500).json(apiResponse);
+  }
+};
+const deleteSharedGroupExpense = async (req, res) => {
+  let apiResponse = new ApiResponseModel();
+  try {
+    const data = await SharedGroupMembersExpensesModel.findByIdAndDelete(
+      req.params.contributionId
+    );
+    if (data) {
+      apiResponse.status = true;
+      apiResponse.msg = "Deleted successfully";
+      apiResponse.data = data;
+    } else {
+      apiResponse.msg = "Error in Deleting";
+    }
+    res.status(200).json(apiResponse);
+  } catch (error) {
+    console.log(error);
+    apiResponse.errors = error;
+    res.status(500).json(apiResponse);
+  }
+};
 
+const getSharedGroupExpenses = async (req, res) => {
+  const { createdFrom, createdTo, groupId } = req.body;
+
+  let apiResponse = new ApiResponseModel();
+  let dateMatchQuery = {};
+  if (createdFrom && createdTo) {
+    dateMatchQuery = {
+      date: {
+        $gte: new Date(createdFrom),
+        $lte: new Date(createdTo),
+      },
+    };
+  } else if (createdFrom) {
+    dateMatchQuery = {
+      date: { $gte: new Date(createdFrom) },
+    };
+  } else if (createdTo) {
+    dateMatchQuery = {
+      date: { $lte: new Date(createdTo) },
+    };
+  }
+
+  try {
+    const expenses = await SharedGroupMembersExpensesModel.aggregate([
+      {
+        $match: {
+          $and: [
+            dateMatchQuery,
+            {
+              groupId: convertStringIdToObjectId(groupId),
+            },
+          ],
+        },
+      },
+      {
+        $lookup: {
+          from: "members",
+          localField: "memberId",
+          foreignField: "_id",
+          as: "membersData",
+        },
+      },
+
+      {
+        $unwind: "$membersData",
+      },
+      {
+        $addFields: {
+          name: {
+            $concat: [
+              "$membersData.firstName",
+              " ",
+              "$membersData.lastName",
+              {
+                $cond: [
+                  {
+                    $eq: [
+                      "$membersData.userId",
+                      convertStringIdToObjectId(req.tokenId),
+                    ],
+                  },
+                  " (You)",
+                  "",
+                ],
+              },
+            ],
+          },
+          email: "$membersData.email",
+          profile: "$membersData.profile",
+        },
+      },
+      {
+        $project: {
+          membersData: 0,
+        },
+      },
+
+      { $sort: { createdAt: -1 } },
+    ]);
+
+    if (expenses) {
+      apiResponse.status = true;
+      apiResponse.data = expenses;
+    }
+    res.status(200).json(apiResponse);
+  } catch (error) {
+    apiResponse.errors = error;
+    res.status(500).send(apiResponse);
+  }
+};
+const getSharedGroupContributions = async (req, res) => {
+  const { createdFrom, createdTo, groupId } = req.body;
+  let apiResponse = new ApiResponseModel();
+  let dateMatchQuery = {};
+  if (createdFrom && createdTo) {
+    dateMatchQuery = {
+      date: {
+        $gte: new Date(createdFrom),
+        $lte: new Date(createdTo),
+      },
+    };
+  } else if (createdFrom) {
+    dateMatchQuery = {
+      date: { $gte: new Date(createdFrom) },
+    };
+  } else if (createdTo) {
+    dateMatchQuery = {
+      date: { $lte: new Date(createdTo) },
+    };
+  }
+
+  try {
+    const expenses = await SharedGroupContributedAmountHistoryModel.aggregate([
+      {
+        $match: {
+          $and: [
+            dateMatchQuery,
+            {
+              groupId: convertStringIdToObjectId(groupId),
+            },
+          ],
+        },
+      },
+      {
+        $lookup: {
+          from: "members",
+          localField: "memberId",
+          foreignField: "_id",
+          as: "membersData",
+        },
+      },
+
+      {
+        $unwind: "$membersData",
+      },
+      {
+        $addFields: {
+          name: {
+            $concat: [
+              "$membersData.firstName",
+              " ",
+              "$membersData.lastName",
+              {
+                $cond: [
+                  {
+                    $eq: [
+                      "$membersData.userId",
+                      convertStringIdToObjectId(req.tokenId),
+                    ],
+                  },
+                  " (You)",
+                  "",
+                ],
+              },
+            ],
+          },
+          email: "$membersData.email",
+          profile: "$membersData.profile",
+        },
+      },
+      {
+        $project: {
+          membersData: 0,
+        },
+      },
+
+      { $sort: { createdAt: -1 } },
+    ]);
+
+    if (expenses) {
+      apiResponse.status = true;
+      apiResponse.data = expenses;
+    }
+    res.status(200).json(apiResponse);
+  } catch (error) {
+    apiResponse.errors = error;
+    res.status(500).send(apiResponse);
+  }
+};
 module.exports = {
   addGroupMembersExpenses,
   getGroupMembersExpenses,
   getExpenses,
+  getSharedGroupExpenses,
+  getSharedGroupContributions,
   deleteExpense,
   updateExpense,
   receivedAmout,
+  addSharedGroupExpense,
+  updateSharedGroupExpense,
+  deleteSharedGroupExpense,
 };

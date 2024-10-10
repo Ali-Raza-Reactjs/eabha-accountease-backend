@@ -43,11 +43,6 @@ const getMemberUsingUsernameOrEmail = async (req, res) => {
           const checkIsAlreadyFriended = tokenMemberData.friends.some((dt) =>
             compareObjectIds(dt.memberId, memberData._id)
           );
-          console.log(
-            tokenMemberData.friends,
-            memberData.id,
-            checkIsAlreadyFriended
-          );
           if (checkIsAlreadyFriended) {
             apiResponse.msg = "Already friend";
             apiResponse.data = memberData;
@@ -347,7 +342,6 @@ const updateProfile = async (req, res) => {
 
         if (getBooleanFromObject(files) && files.profile) {
           const file = files.profile[0];
-          console.log(file.size);
           if (file.size <= MAX_FILE_SIZE_BYTES) {
             // check if member already exist with email
             uploadedUrl = await uploadFile(file);
@@ -358,27 +352,19 @@ const updateProfile = async (req, res) => {
         }
 
         const filter = { userId: req.tokenId };
-        let update = {};
+        let update = {
+          firstName: _firstName,
+          lastName: _lastName,
+          email: _email,
+          updatedBy: req.tokenId,
+        };
 
-        console.log(_phone);
+        if (_phone !== "null") {
+          update.phone = _phone;
+        }
 
         if (uploadedUrl) {
-          update = {
-            firstName: _firstName,
-            lastName: _lastName,
-            email: _email,
-            phone: _phone,
-            profile: uploadedUrl,
-            updatedBy: req.tokenId,
-          };
-        } else {
-          update = {
-            firstName: _firstName,
-            lastName: _lastName,
-            email: _email,
-            phone: _phone,
-            updatedBy: req.tokenId,
-          };
+          update.profile = uploadedUrl;
         }
 
         const updateData = await MemberModel.findOneAndUpdate(filter, update);

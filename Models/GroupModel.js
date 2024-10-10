@@ -9,6 +9,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    isShared: {
+      type: Boolean,
+      default: false,
+    },
     members: {
       type: Array,
       default: [],

@@ -3,6 +3,10 @@ const mongoose = require("mongoose");
 const MemberModel = require("../Models/MemberModel");
 const admin = require("firebase-admin");
 const bcrypt = require("bcrypt");
+const { getIO } = require("../socket");
+const NotificationModel = require("../Models/NotificationModel");
+const moment = require("moment");
+
 const serviceAccount = {
   type: process.env.SERVICE_ACCOUNT_TYPE,
   project_id: process.env.SERVICE_ACCOUNT_PROJECT_ID,
@@ -142,6 +146,63 @@ const comparePassword = async (oldPassword, newPassword) => {
   const auth = await bcrypt.compare(oldPassword, newPassword);
   return auth;
 };
+
+const handleSendNotification = async (memberId, _notificationData) => {
+  const io = getIO();
+  try {
+    const notificationResponse = await NotificationModel.create(
+      _notificationData
+    );
+    const [notificationData] = await NotificationModel.aggregate([
+      {
+        $match: { _id: notificationResponse._id },
+      },
+      {
+        $lookup: {
+          from: "members",
+          localField: "fromMemberId",
+          foreignField: "_id",
+          as: "memberData",
+        },
+      },
+      {
+        $unwind: "$memberData",
+      },
+      {
+        $addFields: {
+          memberName: {
+            $concat: [
+              { $ifNull: [{ $toString: "$memberData.firstName" }, ""] },
+              " ",
+              { $ifNull: [{ $toString: "$memberData.lastName" }, ""] },
+            ],
+          },
+          memberProfile: "$memberData.profile",
+        },
+      },
+      {
+        $project: {
+          memberData: 0,
+        },
+      },
+    ]);
+
+    if (notificationData) {
+      io.emit(`notification:${memberId}`, notificationData);
+    }
+  } catch (error) {
+    console.log(error);
+  }
+};
+
+const handleGetDateForTime00 = (date) => {
+  if (date) {
+    const originalDate = moment(new Date(date));
+    const newDate = originalDate.add(1, "days");
+    return newDate.toISOString();
+  }
+  return null;
+};
 module.exports = {
   uploadFile,
   deleteFile,
@@ -155,4 +216,6 @@ module.exports = {
   MAX_FILE_SIZE_BYTES,
   getBooleanFromObject,
   comparePassword,
+  handleSendNotification,
+  handleGetDateForTime00,
 };
