@@ -12,7 +12,6 @@ module.exports.checkAuthorization = async (req, res, next) => {
       const decodedToken = jwt.verify(token, process.env.JWT_SECRET_KEY);
       const user = await User.findById(decodedToken.id);
       if (user) {
-        req.user = user.email;
         req.tokenId = decodedToken.id;
         next();
       } else {
@@ -25,6 +24,6 @@ module.exports.checkAuthorization = async (req, res, next) => {
     }
   } else {
     apiResponse.msg = "Invalid token";
-    return res.status(401).json({ status: false });
+    return res.status(401).json(apiResponse);
   }
 };

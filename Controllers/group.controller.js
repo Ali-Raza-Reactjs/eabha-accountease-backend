@@ -950,9 +950,9 @@ const getSharedGroupTotalExpensesAmountByGroupId = async (req, res) => {
 const addContributionInSharedGroup = async (req, res) => {
   let apiResponse = new ApiResponseModel();
   try {
-    const tokenMemberData = await MemberModel.findOne({ userId: req.tokenId });
-    const reqBody = { ...req.body, memberId: tokenMemberData._id };
-    const data = await SharedGroupContributedAmountHistoryModel.create(reqBody);
+    // const tokenMemberData = await MemberModel.findOne({ userId: req.tokenId });
+    // const reqBody = { ...req.body, memberId: tokenMemberData._id };
+    const data = await SharedGroupContributedAmountHistoryModel.create(req.body);
     if (data) {
       apiResponse.status = true;
       apiResponse.msg = "Amount added successfully";
