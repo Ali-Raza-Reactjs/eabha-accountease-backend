@@ -10,7 +10,7 @@ cron.schedule("0 0 * * *", async () => {
     read: true,
     open: true,
   });
-  console.log("Deleted read notifications older than 30 days");
+  console.log("Deleted read notifications older than 15 days");
 });
 
 module.exports = cron; // Export if needed elsewhere
