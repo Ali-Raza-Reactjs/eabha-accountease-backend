@@ -13,6 +13,10 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    totalExpenseAmount: {
+      type: Number,
+      default: 0,
+    },
     members: {
       type: Array,
       default: [],

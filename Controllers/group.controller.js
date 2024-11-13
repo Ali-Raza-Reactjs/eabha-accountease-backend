@@ -154,7 +154,6 @@ const getAllSharedGroups = async (req, res) => {
           isShared: true,
         },
       },
-
       {
         $lookup: {
           from: "members",
@@ -367,6 +366,7 @@ const addSharedGroup = async (req, res) => {
           img: _img,
           name: _name,
           isShared: true,
+          totalExpenseAmount: 0,
           members: mappedMembers,
           createdBy: req.tokenId,
         });
@@ -374,7 +374,7 @@ const addSharedGroup = async (req, res) => {
         await MemberModel.updateMany(
           { _id: { $in: membersIds } }, // Filter criteria: match documents where the _id is in membersIds
           {
-            $push: { groups: { groupId: data._id } }, // Update operation: push a new object into the groups array
+            $push: { groups: { groupId: data._id, totalExpenses: 0 } }, // Update operation: push a new object into the groups array
           }
         );
 

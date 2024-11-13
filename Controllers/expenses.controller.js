@@ -10,6 +10,7 @@ const {
   getTokenMemberData,
   handleGetDateForTime00,
 } = require("../Utils/utils");
+const GroupModel = require("../Models/GroupModel");
 
 const getGroupMembersExpenses = async (req, res) => {
   const { groupId } = req.params;
@@ -1056,11 +1057,20 @@ const receivedAmout = async (req, res) => {
 };
 const addSharedGroupExpense = async (req, res) => {
   let apiResponse = new ApiResponseModel();
+  const { groupId, amount } = req.body;
   try {
     const tokenMemberData = await MemberModel.findOne({ userId: req.tokenId });
     const reqBody = { ...req.body, memberId: tokenMemberData._id };
     const data = await SharedGroupMembersExpensesModel.create(reqBody);
     if (data) {
+      await GroupModel.findByIdAndUpdate(
+        groupId,
+        {
+          $inc: { totalExpenseAmount: Number(amount) },
+        },
+        { new: true }
+      );
+
       apiResponse.status = true;
       apiResponse.msg = "Expenses added successfully";
       apiResponse.data = data;
@@ -1076,14 +1086,25 @@ const addSharedGroupExpense = async (req, res) => {
 };
 const updateSharedGroupExpense = async (req, res) => {
   let apiResponse = new ApiResponseModel();
+  const { amount, expenseId } = req.body;
   try {
-    // const tokenMemberData = await MemberModel.findOne({ userId: req.tokenId });
-    // const reqBody = { ...req.body, memberId: tokenMemberData._id };
+    const oldExpense = await SharedGroupMembersExpensesModel.findById(
+      expenseId
+    );
     const data = await SharedGroupMembersExpensesModel.findByIdAndUpdate(
       req.body.expenseId,
       req.body
     );
+
     if (data) {
+      await GroupModel.findByIdAndUpdate(
+        oldExpense.groupId,
+        {
+          $inc: { totalExpenseAmount: Number(amount) - oldExpense.amount },
+        },
+        { new: true }
+      );
+
       apiResponse.status = true;
       apiResponse.msg = "Expenses updated successfully";
       apiResponse.data = data;
@@ -1100,10 +1121,20 @@ const updateSharedGroupExpense = async (req, res) => {
 const deleteSharedGroupExpense = async (req, res) => {
   let apiResponse = new ApiResponseModel();
   try {
+    const oldExpense = await SharedGroupMembersExpensesModel.findById(
+      req.params.contributionId
+    );
     const data = await SharedGroupMembersExpensesModel.findByIdAndDelete(
       req.params.contributionId
     );
     if (data) {
+      await GroupModel.findByIdAndUpdate(
+        oldExpense.groupId,
+        {
+          $inc: { totalExpenseAmount: -oldExpense.amount },
+        },
+        { new: true }
+      );
       apiResponse.status = true;
       apiResponse.msg = "Deleted successfully";
       apiResponse.data = data;
@@ -1195,7 +1226,7 @@ const getSharedGroupExpenses = async (req, res) => {
         },
       },
 
-      { $sort: { createdAt: -1 } },
+      { $sort: { date: -1, createdAt: -1 } },
     ]);
 
     if (expenses) {
