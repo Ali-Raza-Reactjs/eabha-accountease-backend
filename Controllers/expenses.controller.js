@@ -510,7 +510,7 @@ const addGroupMembersExpenses = async (req, res) => {
 
       // Handling splitMemberDetails updates
       for (const [memberId, splitAmount] of Object.entries(
-        splitMemberDetails
+        splitMemberDetails,
       )) {
         const updateOperation = {
           updateOne: {
@@ -588,7 +588,7 @@ const addGroupMembersExpenses = async (req, res) => {
               },
             },
           },
-        })
+        }),
       );
 
       await MemberModel.bulkWrite(memberBalanceUpdateOperation);
@@ -661,7 +661,7 @@ const updateExpense = async (req, res) => {
 
       const updatedData = await ExpenseModel.findByIdAndUpdate(
         expenseId,
-        reqData
+        reqData,
       );
 
       await GroupMembersExpensesModel.updateMany(
@@ -672,7 +672,7 @@ const updateExpense = async (req, res) => {
               expenseId: convertStringIdToObjectId(expenseId),
             },
           },
-        }
+        },
       );
       await GroupMembersExpensesModel.updateMany(
         { groupId: convertStringIdToObjectId(groupId) },
@@ -690,7 +690,7 @@ const updateExpense = async (req, res) => {
               },
             },
           },
-        ]
+        ],
       );
       const updates = [];
 
@@ -737,7 +737,7 @@ const updateExpense = async (req, res) => {
 
       // Handling splitMemberDetails updates
       for (const [memberId, splitAmount] of Object.entries(
-        splitMemberDetails
+        splitMemberDetails,
       )) {
         const updateOperation = {
           updateOne: {
@@ -815,7 +815,7 @@ const updateExpense = async (req, res) => {
               },
             },
           },
-        })
+        }),
       );
       await MemberModel.bulkWrite(memberBalanceUpdateOperation);
       if (updatedData) {
@@ -885,7 +885,7 @@ const deleteExpense = async (req, res) => {
               expenseId: convertStringIdToObjectId(expenseId),
             },
           },
-        }
+        },
       );
       await GroupMembersExpensesModel.updateMany(
         { groupId: convertStringIdToObjectId(groupId) },
@@ -903,7 +903,7 @@ const deleteExpense = async (req, res) => {
               },
             },
           },
-        ]
+        ],
       );
       if (deletedData) {
         apiResponse.status = true;
@@ -932,7 +932,7 @@ const receivedAmout = async (req, res) => {
     // Fetch the member data using the token
     const tokenMemberData = await getTokenMemberData(req.tokenId);
     const fromMemberData = await MemberModel.findById(
-      convertStringIdToObjectId(fromMemberId)
+      convertStringIdToObjectId(fromMemberId),
     );
 
     // Prepare the request data
@@ -943,9 +943,8 @@ const receivedAmout = async (req, res) => {
     };
 
     // Create the received amount history record
-    const receivedAmountResponse = await ReceivedAmountHistoryModel.create(
-      reqData
-    );
+    const receivedAmountResponse =
+      await ReceivedAmountHistoryModel.create(reqData);
 
     if (receivedAmountResponse) {
       // Define operations for updating member balances
@@ -1068,7 +1067,7 @@ const addSharedGroupExpense = async (req, res) => {
         {
           $inc: { totalExpenseAmount: Number(amount) },
         },
-        { new: true }
+        { new: true },
       );
 
       apiResponse.status = true;
@@ -1088,12 +1087,11 @@ const updateSharedGroupExpense = async (req, res) => {
   let apiResponse = new ApiResponseModel();
   const { amount, expenseId } = req.body;
   try {
-    const oldExpense = await SharedGroupMembersExpensesModel.findById(
-      expenseId
-    );
+    const oldExpense =
+      await SharedGroupMembersExpensesModel.findById(expenseId);
     const data = await SharedGroupMembersExpensesModel.findByIdAndUpdate(
       req.body.expenseId,
-      req.body
+      req.body,
     );
 
     if (data) {
@@ -1102,7 +1100,7 @@ const updateSharedGroupExpense = async (req, res) => {
         {
           $inc: { totalExpenseAmount: Number(amount) - oldExpense.amount },
         },
-        { new: true }
+        { new: true },
       );
 
       apiResponse.status = true;
@@ -1122,10 +1120,10 @@ const deleteSharedGroupExpense = async (req, res) => {
   let apiResponse = new ApiResponseModel();
   try {
     const oldExpense = await SharedGroupMembersExpensesModel.findById(
-      req.params.contributionId
+      req.params.contributionId,
     );
     const data = await SharedGroupMembersExpensesModel.findByIdAndDelete(
-      req.params.contributionId
+      req.params.contributionId,
     );
     if (data) {
       await GroupModel.findByIdAndUpdate(
@@ -1133,7 +1131,7 @@ const deleteSharedGroupExpense = async (req, res) => {
         {
           $inc: { totalExpenseAmount: -oldExpense.amount },
         },
-        { new: true }
+        { new: true },
       );
       apiResponse.status = true;
       apiResponse.msg = "Deleted successfully";
@@ -1150,7 +1148,7 @@ const deleteSharedGroupExpense = async (req, res) => {
 };
 
 const getSharedGroupExpenses = async (req, res) => {
-  const { createdFrom, createdTo, groupId } = req.body;
+  const { createdFrom, createdTo, groupId, comment } = req.body;
 
   let apiResponse = new ApiResponseModel();
   let dateMatchQuery = {};
@@ -1179,6 +1177,9 @@ const getSharedGroupExpenses = async (req, res) => {
             dateMatchQuery,
             {
               groupId: convertStringIdToObjectId(groupId),
+            },
+            {
+              comment: { $regex: comment, $options: "i" }, // <-- filter comment contains
             },
           ],
         },
